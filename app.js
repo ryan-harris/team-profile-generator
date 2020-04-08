@@ -5,9 +5,6 @@ const inquirer = require("inquirer");
 const path = require("path");
 const fs = require("fs");
 
-const OUTPUT_DIR = path.resolve(__dirname, "output");
-const outputPath = path.join(OUTPUT_DIR, "team.html");
-
 const render = require("./lib/htmlRenderer");
 
 const employees = [];
@@ -15,27 +12,14 @@ const employees = [];
 createTeam();
 
 function createTeam() {
-  askQuestions("manager")
-    .then(answers => {
-      employees.push(
-        new Manager(
-          answers.name,
-          answers.id,
-          answers.email,
-          answers.officeNumber
-        )
-      );
-      return createMembers();
-    })
-    .then(() => {
-      console.log(employees);
-    });
+  addEmployee("manager")
+    .then(() => createEmployee())
+    .catch(err => console.log(err));
 }
 
-async function createMembers() {
-  let continueAsking = true;
-  while (continueAsking) {
-    const answer = await inquirer.prompt([
+function createEmployee() {
+  inquirer
+    .prompt([
       {
         type: "list",
         name: "type",
@@ -46,65 +30,93 @@ async function createMembers() {
           "I don't want to add any more team members"
         ]
       }
-    ]);
+    ])
+    .then(answer => {
+      switch (answer.type) {
+        case "Engineer":
+        case "Intern":
+          addEmployee(answer.type).then(() => createEmployee());
+          break;
+        default:
+          writeFile();
+      }
+    });
+}
 
-    switch (answer.type) {
-      case "Engineer":
-      case "Intern":
-        await askQuestions(answer.type).then(answers => {
-          createEmployee(answer.type, answers);
-        });
-        break;
-      default:
-        continueAsking = false;
+function writeFile() {
+  const OUTPUT_DIR = path.resolve(__dirname, "output");
+  const outputPath = path.join(OUTPUT_DIR, "team.html");
+
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    fs.mkdirSync(OUTPUT_DIR);
+  }
+
+  fs.writeFile(outputPath, render(employees), err => {
+    if (err) {
+      console.log(err);
     }
-  }
+    console.log("Done writing file: " + outputPath);
+  });
 }
 
-function createEmployee(role, answers) {
-  switch (role.toLowerCase()) {
-    case "engineer":
-      return employees.push(
-        new Engineer(answers.name, answers.id, answers.email, answers.github)
-      );
-    case "intern":
-      return employees.push(
-        new Intern(answers.name, answers.id, answers.email, answers.school)
-      );
-    default:
-      return;
-  }
-}
-
-function askQuestions(role) {
+function addEmployee(role) {
   role = role.toLowerCase();
-  return inquirer.prompt([
-    {
-      name: "name",
-      message: `What is your ${role}'s name?`
-    },
-    {
-      name: "id",
-      message: `What is your ${role}'s id?`
-    },
-    {
-      name: "email",
-      message: `What is your ${role}'s email?`
-    },
-    {
-      name: "officeNumber",
-      message: `What is your ${role}'s office number?`,
-      when: role === "manager"
-    },
-    {
-      name: "github",
-      message: `What is your ${role}'s GitHub username?`,
-      when: role === "engineer"
-    },
-    {
-      name: "school",
-      message: `What is your ${role}'s school?`,
-      when: role === "intern"
-    }
-  ]);
+  return inquirer
+    .prompt([
+      {
+        name: "name",
+        message: `What is your ${role}'s name?`
+      },
+      {
+        name: "id",
+        message: `What is your ${role}'s id?`
+      },
+      {
+        name: "email",
+        message: `What is your ${role}'s email?`
+      },
+      {
+        name: "officeNumber",
+        message: `What is your ${role}'s office number?`,
+        when: role === "manager"
+      },
+      {
+        name: "github",
+        message: `What is your ${role}'s GitHub username?`,
+        when: role === "engineer"
+      },
+      {
+        name: "school",
+        message: `What is your ${role}'s school?`,
+        when: role === "intern"
+      }
+    ])
+    .then(answers => {
+      switch (role) {
+        case "manager":
+          return employees.push(
+            new Manager(
+              answers.name,
+              answers.id,
+              answers.email,
+              answers.officeNumber
+            )
+          );
+        case "engineer":
+          return employees.push(
+            new Engineer(
+              answers.name,
+              answers.id,
+              answers.email,
+              answers.github
+            )
+          );
+        case "intern":
+          return employees.push(
+            new Intern(answers.name, answers.id, answers.email, answers.school)
+          );
+        default:
+          return;
+      }
+    });
 }
